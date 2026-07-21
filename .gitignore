@@ -1,0 +1,44 @@
+# Gradle
+.gradle/
+build/
+bin/
+out/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Node / JS
+node_modules/
+dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+.project
+.classpath
+.settings/
+
+# OS Files
+Thumbs.db
+desktop.ini
+ehthumbs.db
+
+# Databases & Session Recordings
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.bin
+*.crn
+session-temp/
+session.crn
+timeline.sqlite
+recorder/session-temp/
+samples/session-temp/
+recorder/session.crn
+samples/session.crn
+chronos-implementation-plan.md

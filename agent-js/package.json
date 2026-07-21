@@ -1,0 +1,19 @@
+{
+  "name": "chronos-agent",
+  "version": "1.0.0",
+  "description": "Chronos Browser Instrumentation Agent",
+  "main": "dist/chronos-agent.js",
+  "type": "module",
+  "scripts": {
+    "build": "rollup -c",
+    "build:watch": "rollup -c -w"
+  },
+  "devDependencies": {
+    "@rollup/plugin-commonjs": "^25.0.7",
+    "@rollup/plugin-node-resolve": "^15.2.3",
+    "@rollup/plugin-typescript": "^11.1.6",
+    "rollup": "^4.9.6",
+    "tslib": "^2.8.1",
+    "typescript": "^5.3.3"
+  }
+}

@@ -1,0 +1,79 @@
+<html lang="en"><head>
+  <meta charset="UTF-8">
+  <title>Chronos Spike Test Page</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 40px;
+      background: #f0f0f0;
+      color: #333;
+    }
+    .box {
+      width: 100px;
+      height: 100px;
+      background: #ff5722;
+      margin-bottom: 20px;
+      transition: background 0.3s;
+    }
+    button {
+      padding: 10px 15px;
+      margin-right: 10px;
+      cursor: pointer;
+    }
+    #log {
+      margin-top: 20px;
+      padding: 10px;
+      background: #fff;
+      border: 1px solid #ccc;
+      min-height: 50px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Chronos Time-Travel Spike</h1>
+  <div id="container">
+    
+  <p id="child-1">Dynamic Child #1</p><p id="child-2">Dynamic Child #2</p><p id="child-3">Dynamic Child #3</p></div>
+  
+  <button id="btn-add">Add Child</button>
+  <button id="btn-color">Change Color</button>
+  <button id="btn-remove">Remove Box</button>
+  
+  <div id="log">Removed box</div>
+
+  <script>
+    const box = document.getElementById('target-box');
+    const container = document.getElementById('container');
+    const log = document.getElementById('log');
+    let childCount = 0;
+
+    document.getElementById('btn-add').addEventListener('click', () => {
+      childCount++;
+      const p = document.createElement('p');
+      p.id = `child-${childCount}`;
+      p.textContent = `Dynamic Child #${childCount}`;
+      container.appendChild(p);
+      log.textContent = `Added child #${childCount}`;
+    });
+
+    document.getElementById('btn-color').addEventListener('click', () => {
+      const colors = ['#4caf50', '#2196f3', '#9c27b0', '#ffeb3b'];
+      const randomColor = colors[Math.floor(Math.random() * colors.length)];
+      box.style.backgroundColor = randomColor;
+      log.textContent = `Changed color to ${randomColor}`;
+    });
+
+    document.getElementById('btn-remove').addEventListener('click', () => {
+      if (box && box.parentNode) {
+        box.parentNode.removeChild(box);
+        log.textContent = `Removed box`;
+      }
+    });
+
+    // Console logs for testing console observer
+    console.log("Page initialized");
+    console.warn("This is a warning log");
+  </script>
+
+
+</body></html>

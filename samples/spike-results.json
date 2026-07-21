@@ -1,0 +1,424 @@
+{
+  "initialDom": {
+    "id": 1,
+    "nodeType": 1,
+    "tagName": "html",
+    "attributes": {
+      "lang": "en"
+    },
+    "childNodes": [
+      {
+        "id": 2,
+        "nodeType": 1,
+        "tagName": "head",
+        "attributes": {},
+        "childNodes": [
+          {
+            "id": 3,
+            "nodeType": 3,
+            "nodeValue": "\n  "
+          },
+          {
+            "id": 4,
+            "nodeType": 1,
+            "tagName": "meta",
+            "attributes": {
+              "charset": "UTF-8"
+            },
+            "childNodes": []
+          },
+          {
+            "id": 5,
+            "nodeType": 3,
+            "nodeValue": "\n  "
+          },
+          {
+            "id": 6,
+            "nodeType": 1,
+            "tagName": "title",
+            "attributes": {},
+            "childNodes": [
+              {
+                "id": 7,
+                "nodeType": 3,
+                "nodeValue": "Chronos Spike Test Page"
+              }
+            ]
+          },
+          {
+            "id": 8,
+            "nodeType": 3,
+            "nodeValue": "\n  "
+          },
+          {
+            "id": 9,
+            "nodeType": 1,
+            "tagName": "style",
+            "attributes": {},
+            "childNodes": [
+              {
+                "id": 10,
+                "nodeType": 3,
+                "nodeValue": "\n    body {\n      font-family: sans-serif;\n      margin: 40px;\n      background: #f0f0f0;\n      color: #333;\n    }\n    .box {\n      width: 100px;\n      height: 100px;\n      background: #ff5722;\n      margin-bottom: 20px;\n      transition: background 0.3s;\n    }\n    button {\n      padding: 10px 15px;\n      margin-right: 10px;\n      cursor: pointer;\n    }\n    #log {\n      margin-top: 20px;\n      padding: 10px;\n      background: #fff;\n      border: 1px solid #ccc;\n      min-height: 50px;\n    }\n  "
+              }
+            ]
+          },
+          {
+            "id": 11,
+            "nodeType": 3,
+            "nodeValue": "\n"
+          }
+        ]
+      },
+      {
+        "id": 12,
+        "nodeType": 3,
+        "nodeValue": "\n"
+      },
+      {
+        "id": 13,
+        "nodeType": 1,
+        "tagName": "body",
+        "attributes": {},
+        "childNodes": [
+          {
+            "id": 14,
+            "nodeType": 3,
+            "nodeValue": "\n  "
+          },
+          {
+            "id": 15,
+            "nodeType": 1,
+            "tagName": "h1",
+            "attributes": {},
+            "childNodes": [
+              {
+                "id": 16,
+                "nodeType": 3,
+                "nodeValue": "Chronos Time-Travel Spike"
+              }
+            ]
+          },
+          {
+            "id": 17,
+            "nodeType": 3,
+            "nodeValue": "\n  "
+          },
+          {
+            "id": 18,
+            "nodeType": 1,
+            "tagName": "div",
+            "attributes": {
+              "id": "container"
+            },
+            "childNodes": [
+              {
+                "id": 19,
+                "nodeType": 3,
+                "nodeValue": "\n    "
+              },
+              {
+                "id": 20,
+                "nodeType": 1,
+                "tagName": "div",
+                "attributes": {
+                  "id": "target-box",
+                  "class": "box"
+                },
+                "childNodes": []
+              },
+              {
+                "id": 21,
+                "nodeType": 3,
+                "nodeValue": "\n  "
+              }
+            ]
+          },
+          {
+            "id": 22,
+            "nodeType": 3,
+            "nodeValue": "\n  \n  "
+          },
+          {
+            "id": 23,
+            "nodeType": 1,
+            "tagName": "button",
+            "attributes": {
+              "id": "btn-add"
+            },
+            "childNodes": [
+              {
+                "id": 24,
+                "nodeType": 3,
+                "nodeValue": "Add Child"
+              }
+            ]
+          },
+          {
+            "id": 25,
+            "nodeType": 3,
+            "nodeValue": "\n  "
+          },
+          {
+            "id": 26,
+            "nodeType": 1,
+            "tagName": "button",
+            "attributes": {
+              "id": "btn-color"
+            },
+            "childNodes": [
+              {
+                "id": 27,
+                "nodeType": 3,
+                "nodeValue": "Change Color"
+              }
+            ]
+          },
+          {
+            "id": 28,
+            "nodeType": 3,
+            "nodeValue": "\n  "
+          },
+          {
+            "id": 29,
+            "nodeType": 1,
+            "tagName": "button",
+            "attributes": {
+              "id": "btn-remove"
+            },
+            "childNodes": [
+              {
+                "id": 30,
+                "nodeType": 3,
+                "nodeValue": "Remove Box"
+              }
+            ]
+          },
+          {
+            "id": 31,
+            "nodeType": 3,
+            "nodeValue": "\n  \n  "
+          },
+          {
+            "id": 32,
+            "nodeType": 1,
+            "tagName": "div",
+            "attributes": {
+              "id": "log"
+            },
+            "childNodes": [
+              {
+                "id": 33,
+                "nodeType": 3,
+                "nodeValue": "Logs will appear here..."
+              }
+            ]
+          },
+          {
+            "id": 34,
+            "nodeType": 3,
+            "nodeValue": "\n\n  "
+          },
+          {
+            "id": 35,
+            "nodeType": 1,
+            "tagName": "script",
+            "attributes": {},
+            "childNodes": [
+              {
+                "id": 36,
+                "nodeType": 3,
+                "nodeValue": "\n    const box = document.getElementById('target-box');\n    const container = document.getElementById('container');\n    const log = document.getElementById('log');\n    let childCount = 0;\n\n    document.getElementById('btn-add').addEventListener('click', () => {\n      childCount++;\n      const p = document.createElement('p');\n      p.id = `child-${childCount}`;\n      p.textContent = `Dynamic Child #${childCount}`;\n      container.appendChild(p);\n      log.textContent = `Added child #${childCount}`;\n    });\n\n    document.getElementById('btn-color').addEventListener('click', () => {\n      const colors = ['#4caf50', '#2196f3', '#9c27b0', '#ffeb3b'];\n      const randomColor = colors[Math.floor(Math.random() * colors.length)];\n      box.style.backgroundColor = randomColor;\n      log.textContent = `Changed color to ${randomColor}`;\n    });\n\n    document.getElementById('btn-remove').addEventListener('click', () => {\n      if (box && box.parentNode) {\n        box.parentNode.removeChild(box);\n        log.textContent = `Removed box`;\n      }\n    });\n\n    // Console logs for testing console observer\n    console.log(\"Page initialized\");\n    console.warn(\"This is a warning log\");\n  "
+              }
+            ]
+          },
+          {
+            "id": 37,
+            "nodeType": 3,
+            "nodeValue": "\n\n\n"
+          }
+        ]
+      }
+    ]
+  },
+  "mutations": [
+    {
+      "type": "childList",
+      "target": 18,
+      "timestamp": 549.4000000003725,
+      "addedNodes": [
+        {
+          "id": 38,
+          "nodeType": 1,
+          "tagName": "p",
+          "attributes": {
+            "id": "child-1"
+          },
+          "childNodes": [
+            {
+              "id": 39,
+              "nodeType": 3,
+              "nodeValue": "Dynamic Child #1"
+            }
+          ]
+        }
+      ],
+      "removedNodes": [],
+      "previousSibling": 21,
+      "nextSibling": null
+    },
+    {
+      "type": "childList",
+      "target": 32,
+      "timestamp": 549.4000000003725,
+      "addedNodes": [
+        {
+          "id": 40,
+          "nodeType": 3,
+          "nodeValue": "Added child #1"
+        }
+      ],
+      "removedNodes": [
+        33
+      ],
+      "previousSibling": null,
+      "nextSibling": null
+    },
+    {
+      "type": "childList",
+      "target": 18,
+      "timestamp": 577.5999999996275,
+      "addedNodes": [
+        {
+          "id": 41,
+          "nodeType": 1,
+          "tagName": "p",
+          "attributes": {
+            "id": "child-2"
+          },
+          "childNodes": [
+            {
+              "id": 42,
+              "nodeType": 3,
+              "nodeValue": "Dynamic Child #2"
+            }
+          ]
+        }
+      ],
+      "removedNodes": [],
+      "previousSibling": 38,
+      "nextSibling": null
+    },
+    {
+      "type": "childList",
+      "target": 32,
+      "timestamp": 577.7000000011176,
+      "addedNodes": [
+        {
+          "id": 43,
+          "nodeType": 3,
+          "nodeValue": "Added child #2"
+        }
+      ],
+      "removedNodes": [
+        40
+      ],
+      "previousSibling": null,
+      "nextSibling": null
+    },
+    {
+      "type": "childList",
+      "target": 18,
+      "timestamp": 594.5,
+      "addedNodes": [
+        {
+          "id": 44,
+          "nodeType": 1,
+          "tagName": "p",
+          "attributes": {
+            "id": "child-3"
+          },
+          "childNodes": [
+            {
+              "id": 45,
+              "nodeType": 3,
+              "nodeValue": "Dynamic Child #3"
+            }
+          ]
+        }
+      ],
+      "removedNodes": [],
+      "previousSibling": 41,
+      "nextSibling": null
+    },
+    {
+      "type": "childList",
+      "target": 32,
+      "timestamp": 594.7000000011176,
+      "addedNodes": [
+        {
+          "id": 46,
+          "nodeType": 3,
+          "nodeValue": "Added child #3"
+        }
+      ],
+      "removedNodes": [
+        43
+      ],
+      "previousSibling": null,
+      "nextSibling": null
+    },
+    {
+      "type": "attributes",
+      "target": 20,
+      "timestamp": 611.3000000007451,
+      "attributeName": "style",
+      "attributeValue": "background-color: rgb(255, 235, 59);"
+    },
+    {
+      "type": "childList",
+      "target": 32,
+      "timestamp": 611.4000000003725,
+      "addedNodes": [
+        {
+          "id": 47,
+          "nodeType": 3,
+          "nodeValue": "Changed color to #ffeb3b"
+        }
+      ],
+      "removedNodes": [
+        46
+      ],
+      "previousSibling": null,
+      "nextSibling": null
+    },
+    {
+      "type": "childList",
+      "target": 18,
+      "timestamp": 630.2000000011176,
+      "addedNodes": [],
+      "removedNodes": [
+        20
+      ],
+      "previousSibling": 19,
+      "nextSibling": 21
+    },
+    {
+      "type": "childList",
+      "target": 32,
+      "timestamp": 630.3000000007451,
+      "addedNodes": [
+        {
+          "id": 48,
+          "nodeType": 3,
+          "nodeValue": "Removed box"
+        }
+      ],
+      "removedNodes": [
+        47
+      ],
+      "previousSibling": null,
+      "nextSibling": null
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+services:
+  chrome:
+    image: selenium/standalone-chrome:latest
+    shm_size: 2gb
+    ports:
+      - "4444:4444"    # Selenium/WebDriver endpoint
+      - "9222:9222"    # CDP remote-debugging port
+    environment:
+      - SE_NODE_MAX_SESSIONS=4
+
+  recorder:
+    build:
+      context: ./recorder
+      dockerfile: Dockerfile
+    depends_on:
+      - chrome
+    environment:
+      - CHROME_CDP_URL=http://chrome:9222
+      - AGENT_JS_PATH=/agent-js/dist/chronos-agent.js
+    volumes:
+      - ./agent-js:/agent-js
+
+  agent-js:
+    image: node:20
+    volumes:
+      - ./agent-js:/app
+    working_dir: /app
+    command: ["npm", "run", "build:watch"]
+
+volumes:
+  recorder-output:

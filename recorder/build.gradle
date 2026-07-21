@@ -1,0 +1,41 @@
+plugins {
+    id 'java'
+    id 'application'
+    id 'org.springframework.boot' version '3.2.5'
+    id 'io.spring.dependency-management' version '1.1.4'
+}
+
+group = 'com.chronos'
+version = '1.0.0'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-webflux'
+    implementation 'org.xerial:sqlite-jdbc:3.45.3.0'
+    implementation 'org.lz4:lz4-java:1.8.0'
+    implementation 'com.microsoft.playwright:playwright:1.44.0'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'io.projectreactor:reactor-test'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(24)
+    }
+}
+
+tasks.withType(JavaCompile) {
+    options.release = 21
+}
+
+application {
+    mainClass = 'com.chronos.recorder.App'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}

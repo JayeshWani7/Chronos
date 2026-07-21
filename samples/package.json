@@ -1,0 +1,8 @@
+{
+  "name": "chronos-spike",
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "puppeteer-core": "^22.15.0"
+  }
+}
