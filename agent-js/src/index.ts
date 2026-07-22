@@ -6,7 +6,7 @@ import { initInputObserver } from './input-observer';
 
 function publish(category: string, type: string, payload: any) {
   const event = {
-    ts_ms: Math.round(performance.now()),
+    ts_ms: Date.now(),
     category,
     type,
     payload

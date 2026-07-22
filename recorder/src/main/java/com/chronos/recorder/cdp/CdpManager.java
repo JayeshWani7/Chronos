@@ -22,6 +22,8 @@ public class CdpManager {
     private Page page;
     private DeltaWriter deltaWriter;
 
+    private long sessionStartTime = -1;
+
     public CdpManager(String chromeCdpUrl, TimelineSqlite db) {
         this.chromeCdpUrl = chromeCdpUrl;
         this.db = db;
@@ -32,6 +34,7 @@ public class CdpManager {
     }
 
     public void start(String agentScriptPath) {
+        this.sessionStartTime = System.currentTimeMillis();
         String agentCode;
         try {
             agentCode = Files.readString(Paths.get(agentScriptPath));
@@ -71,6 +74,9 @@ public class CdpManager {
         try {
             JsonNode root = mapper.readTree(jsonEvent);
             long tsMs = root.get("ts_ms").asLong();
+            if (tsMs > 1000000000000L && sessionStartTime != -1) {
+                tsMs = tsMs - sessionStartTime;
+            }
             String category = root.get("category").asText();
             String type = root.get("type").asText();
             JsonNode payload = root.get("payload");

@@ -1,0 +1,9 @@
+// Root build.gradle for Chronos project
+allprojects {
+    group = 'com.chronos'
+    version = '1.0.0'
+
+    repositories {
+        mavenCentral()
+    }
+}

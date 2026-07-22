@@ -1,0 +1,4 @@
+rootProject.name = 'chronos'
+include 'recorder'
+include 'replay-engine'
+include 'cli'
