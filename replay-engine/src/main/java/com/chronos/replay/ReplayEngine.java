@@ -40,6 +40,10 @@ public class ReplayEngine implements AutoCloseable {
         return dbFile;
     }
 
+    public Path getTempDir() {
+        return tempDir;
+    }
+
     public ReplayState reconstructState(long timestampMs) throws Exception {
         ReplayState state = new ReplayState();
         String dbUrl = "jdbc:sqlite:" + dbFile.toAbsolutePath();
@@ -330,7 +334,7 @@ public class ReplayEngine implements AutoCloseable {
             if ("html".equalsIgnoreCase(node.tagName)) {
                 sb.append("<!DOCTYPE html>\n");
             }
-            sb.append("<").append(node.tagName);
+            sb.append("<").append(node.tagName).append(" data-chronos-id=\"").append(node.id).append("\"");
             if (node.attributes != null) {
                 for (Map.Entry<String, String> entry : node.attributes.entrySet()) {
                     sb.append(" ").append(entry.getKey()).append("=\"").append(escapeAttr(entry.getValue())).append("\"");

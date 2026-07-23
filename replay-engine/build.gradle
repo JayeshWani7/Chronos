@@ -3,9 +3,9 @@ plugins {
 }
 
 dependencies {
-    implementation 'org.xerial:sqlite-jdbc:3.45.3.0'
+    api 'org.xerial:sqlite-jdbc:3.45.3.0'
     implementation 'org.lz4:lz4-java:1.8.0'
-    implementation 'com.fasterxml.jackson.core:jackson-databind:2.15.4'
+    api 'com.fasterxml.jackson.core:jackson-databind:2.15.4'
     
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'

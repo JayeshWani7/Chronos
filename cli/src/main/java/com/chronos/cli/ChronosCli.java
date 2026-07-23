@@ -20,7 +20,8 @@ import java.util.concurrent.Callable;
         subcommands = {
                 ChronosCli.ReplayCommand.class,
                 ChronosCli.DiffCommand.class,
-                ChronosCli.SearchCommand.class
+                ChronosCli.SearchCommand.class,
+                ChronosCli.ServerCommand.class
         })
 public class ChronosCli implements Callable<Integer> {
 
@@ -180,6 +181,53 @@ public class ChronosCli implements Callable<Integer> {
                 return 1;
             } catch (Exception e) {
                 System.err.println("Execution failed: " + e.getMessage());
+                e.printStackTrace();
+                return 1;
+            }
+        }
+    }
+
+    @Command(name = "server", description = "Launch a local HTTP API server to expose session data.")
+    public static class ServerCommand implements Callable<Integer> {
+        @Parameters(index = "0", description = "Path to the .crn file.")
+        private File crnFile;
+
+        @Option(names = {"--port", "-p"}, defaultValue = "8080", description = "Port to run the HTTP server on. Defaults to 8080. If 0 is provided, a random free port will be chosen.")
+        private int port;
+
+        @Override
+        public Integer call() {
+            try {
+                if (!crnFile.exists()) {
+                    System.err.println("Error: CRN file not found at " + crnFile.getAbsolutePath());
+                    return 1;
+                }
+
+                // If port is 0, dynamically pick a free port
+                if (port == 0) {
+                    try (java.net.ServerSocket socket = new java.net.ServerSocket(0)) {
+                        port = socket.getLocalPort();
+                    }
+                }
+
+                System.out.println("Starting Chronos HTTP server for file: " + crnFile.getAbsolutePath() + " on port: " + port);
+                ChronosServer server = new ChronosServer(crnFile.toPath(), port);
+                server.start();
+
+                // Shutdown hook to cleanly stop the server
+                Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                    System.out.println("Stopping Chronos HTTP server...");
+                    server.stop();
+                }));
+
+                // Block main thread to keep server running
+                Object lock = new Object();
+                synchronized (lock) {
+                    lock.wait();
+                }
+                return 0;
+            } catch (Exception e) {
+                System.err.println("Failed to start server: " + e.getMessage());
                 e.printStackTrace();
                 return 1;
             }
