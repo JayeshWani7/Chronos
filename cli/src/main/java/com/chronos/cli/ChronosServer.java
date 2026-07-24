@@ -45,6 +45,7 @@ public class ChronosServer {
         server.createContext("/api/state", new StateHandler());
         server.createContext("/api/diff", new DiffHandler());
         server.createContext("/api/search", new SearchHandler());
+        server.createContext("/api/analyze", new AnalyzeHandler());
 
         server.setExecutor(null); // default executor
         server.start();
@@ -216,6 +217,46 @@ public class ChronosServer {
                 String queryExpr = java.net.URLDecoder.decode(queryParams.get("query"), java.nio.charset.StandardCharsets.UTF_8.name());
                 List<QueryResultRow> rows = QueryEngine.query(crnPath, queryExpr);
                 sendJson(exchange, 200, rows);
+            } catch (Exception e) {
+                sendJson(exchange, 500, Map.of("error", e.getMessage()));
+            }
+        }
+    }
+
+    private class AnalyzeHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) {
+                handleOptions(exchange);
+                return;
+            }
+            try {
+                Map<String, String> queryParams = parseQueryParams(exchange.getRequestURI().getQuery());
+                if (!queryParams.containsKey("from") || !queryParams.containsKey("to")) {
+                    sendJson(exchange, 400, Map.of("error", "Missing required query parameters: from, to"));
+                    return;
+                }
+                long from = (long) Double.parseDouble(queryParams.get("from"));
+                long to = (long) Double.parseDouble(queryParams.get("to"));
+                
+                String apiKey = System.getenv("GEMINI_API_KEY");
+                if (apiKey == null || apiKey.isEmpty()) {
+                    sendJson(exchange, 400, Map.of("error", "GEMINI_API_KEY environment variable is not configured on the local host. Please set it before running the AI analyzer."));
+                    return;
+                }
+
+                String analysisJson = com.chronos.replay.GeminiCauseAnalyzer.analyze(crnPath, from, to, apiKey);
+                
+                // Since Gemini Cause Analyzer returns a valid JSON string, we can write it directly as the response body
+                byte[] response = analysisJson.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
+                exchange.getResponseHeaders().add("Access-Control-Allow-Methods", "GET, OPTIONS");
+                exchange.getResponseHeaders().add("Access-Control-Allow-Headers", "Content-Type");
+                exchange.getResponseHeaders().add("Content-Type", "application/json");
+                exchange.sendResponseHeaders(200, response.length);
+                try (java.io.OutputStream os = exchange.getResponseBody()) {
+                    os.write(response);
+                }
             } catch (Exception e) {
                 sendJson(exchange, 500, Map.of("error", e.getMessage()));
             }

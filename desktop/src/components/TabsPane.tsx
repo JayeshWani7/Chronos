@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Terminal, Activity, Database, RefreshCw, Cpu, Bot } from 'lucide-react';
+import { AiInsightPane } from './AiInsightPane';
 
 interface ConsoleLog {
   id: number;
@@ -350,11 +351,11 @@ export const TabsPane: React.FC<TabsPaneProps> = ({
         )}
 
         {activeTab === 'ai' && (
-          <div className="empty-state">
-            <Bot size={32} style={{ color: 'var(--accent-color)' }} />
-            <div className="empty-title">AI Root-Cause Analyzer</div>
-            <div className="empty-desc">AI Analyzer is planning root analysis (Phase 5). Configure range boundaries to prompt Gemini.</div>
-          </div>
+          <AiInsightPane
+            apiPort={apiPort}
+            selectionRange={selectionRange}
+            onChangePlayhead={onChangePlayhead}
+          />
         )}
       </div>
     </div>

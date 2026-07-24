@@ -30,8 +30,16 @@ jar {
         )
     }
     // Create a fat jar
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
     from {
         configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+}
+
+task runCli(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'com.chronos.cli.ChronosCli'
+    if (project.hasProperty('cliArgs')) {
+        args(project.property('cliArgs').split(' '))
     }
 }

@@ -21,7 +21,9 @@ import java.util.concurrent.Callable;
                 ChronosCli.ReplayCommand.class,
                 ChronosCli.DiffCommand.class,
                 ChronosCli.SearchCommand.class,
-                ChronosCli.ServerCommand.class
+                ChronosCli.ServerCommand.class,
+                ChronosCli.RecordCommand.class,
+                ChronosCli.AnalyzeCommand.class
         })
 public class ChronosCli implements Callable<Integer> {
 
@@ -228,6 +230,174 @@ public class ChronosCli implements Callable<Integer> {
                 return 0;
             } catch (Exception e) {
                 System.err.println("Failed to start server: " + e.getMessage());
+                e.printStackTrace();
+                return 1;
+            }
+        }
+    }
+
+    @Command(name = "record", description = "Wrap a test command, automatically running the recorder, and conditionally persisting the container on test failure.")
+    public static class RecordCommand implements Callable<Integer> {
+        @Option(names = {"--out", "-o"}, defaultValue = "session.crn", description = "Output path for the session container (.crn).")
+        private File outFile;
+
+        @Option(names = {"--on-failure-only", "-f"}, description = "Only persist the recording if the wrapped test command fails (exits non-zero).")
+        private boolean onFailureOnly;
+
+        @Parameters(description = "The test command to wrap and run, e.g. 'npm run test'")
+        private List<String> commandArgs;
+
+        @Override
+        public Integer call() {
+            try {
+                if (commandArgs == null || commandArgs.isEmpty()) {
+                    System.err.println("Error: No test command specified. Use '-- <command>' to specify.");
+                    return 1;
+                }
+
+                File jarFile = null;
+                String[] possiblePaths = {
+                    "recorder/build/libs/recorder-1.0.0.jar",
+                    "../recorder/build/libs/recorder-1.0.0.jar",
+                    "build/libs/recorder-1.0.0.jar",
+                    "recorder-1.0.0.jar",
+                    "C:\\Users\\priya\\OneDrive\\Desktop\\Chronos\\recorder\\build\\libs\\recorder-1.0.0.jar"
+                };
+                for (String path : possiblePaths) {
+                    File f = new File(path);
+                    if (f.exists()) {
+                        jarFile = f;
+                        break;
+                    }
+                }
+                if (jarFile == null) {
+                    System.err.println("Error: Could not find recorder-1.0.0.jar. Ensure the project is assembled.");
+                    return 1;
+                }
+
+                System.out.println("Spawning recorder in background: " + jarFile.getAbsolutePath() + " writing to " + outFile.getAbsolutePath());
+                ProcessBuilder pbRec = new ProcessBuilder(
+                    "java", "-jar", jarFile.getAbsolutePath(), outFile.getAbsolutePath()
+                );
+                pbRec.environment().putAll(System.getenv());
+                pbRec.environment().put("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "1");
+                 
+                 // Auto-resolve AGENT_JS_PATH if not explicitly provided
+                 if (!pbRec.environment().containsKey("AGENT_JS_PATH")) {
+                     File agentJs = new File("agent-js/dist/chronos-agent.js");
+                     if (agentJs.exists()) {
+                         pbRec.environment().put("AGENT_JS_PATH", agentJs.getAbsolutePath());
+                     } else {
+                         // Fallback path checks
+                         File agentJsFallback = new File("../agent-js/dist/chronos-agent.js");
+                         if (agentJsFallback.exists()) {
+                             pbRec.environment().put("AGENT_JS_PATH", agentJsFallback.getAbsolutePath());
+                         }
+                     }
+                 }
+
+                 pbRec.redirectErrorStream(true);
+                 Process recProc = pbRec.start();
+
+                // Wait for recorder to output "Recorder is running."
+                java.io.BufferedReader recReader = new java.io.BufferedReader(new java.io.InputStreamReader(recProc.getInputStream()));
+                String line;
+                boolean isRunning = false;
+                while ((line = recReader.readLine()) != null) {
+                    System.out.println("[Recorder] " + line);
+                    if (line.contains("Recorder is running.")) {
+                        isRunning = true;
+                        break;
+                    }
+                }
+
+                if (!isRunning) {
+                    System.err.println("Error: Recorder failed to initialize.");
+                    recProc.destroy();
+                    return 1;
+                }
+
+                // Run the wrapped test command
+                System.out.println("Recorder ready. Running test command: " + String.join(" ", commandArgs));
+                ProcessBuilder pbTest = new ProcessBuilder(commandArgs);
+                pbTest.inheritIO();
+                Process testProc = pbTest.start();
+                int testExitCode = testProc.waitFor();
+                System.out.println("Test command finished with exit code: " + testExitCode);
+
+                // Stop recorder cleanly
+                System.out.println("Stopping background recorder process...");
+                try (java.io.OutputStream os = recProc.getOutputStream()) {
+                    os.write('\n');
+                    os.flush();
+                }
+                
+                // Read remaining output of recorder in a background thread to prevent block
+                Thread drainThread = new Thread(() -> {
+                    try {
+                        String drainLine;
+                        java.io.BufferedReader drainReader = new java.io.BufferedReader(new java.io.InputStreamReader(recProc.getInputStream()));
+                        while ((drainLine = drainReader.readLine()) != null) {
+                            System.out.println("[Recorder] " + drainLine);
+                        }
+                    } catch (Exception e) {}
+                });
+                drainThread.start();
+                
+                recProc.waitFor();
+
+                // Conditional persistence
+                if (onFailureOnly && testExitCode == 0) {
+                    System.out.println("Test succeeded. Deleting container as --on-failure-only is set.");
+                    if (outFile.exists()) {
+                        outFile.delete();
+                    }
+                } else {
+                    System.out.println("Recording preserved at: " + outFile.getAbsolutePath());
+                }
+
+                return testExitCode;
+            } catch (Exception e) {
+                System.err.println("Recording wrapper failed: " + e.getMessage());
+                e.printStackTrace();
+                return 1;
+            }
+        }
+    }
+
+    @Command(name = "analyze", description = "Query event timelines and use the Gemini API to analyze root causes of failures.")
+    public static class AnalyzeCommand implements Callable<Integer> {
+        @Parameters(index = "0", description = "Path to the .crn file.")
+        private File crnFile;
+
+        @Option(names = {"--from"}, required = true, description = "Start timestamp in milliseconds.")
+        private long fromMs;
+
+        @Option(names = {"--to"}, required = true, description = "End timestamp in milliseconds.")
+        private long toMs;
+
+        @Override
+        public Integer call() {
+            try {
+                if (!crnFile.exists()) {
+                    System.err.println("Error: CRN file not found at " + crnFile.getAbsolutePath());
+                    return 1;
+                }
+
+                String apiKey = System.getenv("GEMINI_API_KEY");
+                if (apiKey == null || apiKey.isEmpty()) {
+                    System.err.println("Error: GEMINI_API_KEY environment variable is not set.");
+                    return 1;
+                }
+
+                System.out.println("Running AI root-cause analysis on " + crnFile.getName() + " from " + fromMs + "ms to " + toMs + "ms...");
+                String analysis = com.chronos.replay.GeminiCauseAnalyzer.analyze(crnFile.toPath(), fromMs, toMs, apiKey);
+                System.out.println("\n=== AI ROOT-CAUSE ANALYSIS RESULTS ===");
+                System.out.println(analysis);
+                System.out.println("========================================\n");
+                return 0;
+            } catch (Exception e) {
+                System.err.println("Analysis failed: " + e.getMessage());
                 e.printStackTrace();
                 return 1;
             }

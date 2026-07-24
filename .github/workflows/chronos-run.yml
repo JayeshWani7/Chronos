@@ -1,0 +1,67 @@
+name: Chronos CI Test Wrapper
+
+on:
+  workflow_call:
+    inputs:
+      test-command:
+        required: true
+        type: string
+        description: "The test execution command to wrap with Chronos, e.g. 'npm run test'"
+      output-dir:
+        required: false
+        type: string
+        default: "chronos-failures"
+        description: "Directory to save failure recordings"
+
+jobs:
+  chronos-run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci || npm install
+
+      - name: Install Chrome Browser
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable
+
+      - name: Start Headless Chrome with remote debugging
+        run: |
+          google-chrome-stable --remote-debugging-port=9222 --headless=new --disable-gpu --no-sandbox &
+          # Wait for Chrome to bind remote-debugging port
+          for i in {1..10}; do
+            curl -s http://127.0.0.1:9222/json/version && break || sleep 1
+          done
+
+      - name: Create output directory
+        run: mkdir -p ${{ inputs.output-dir }}
+
+      - name: Run Tests Wrapped with Chronos
+        env:
+          CHROME_CDP_URL: "http://127.0.0.1:9222"
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+          AGENT_JS_PATH: "agent-js/dist/chronos-agent.js"
+        run: |
+          java -jar cli/build/libs/cli-1.0.0.jar record --on-failure-only --out ${{ inputs.output-dir }}/failure.crn -- ${{ inputs.test-command }}
+
+      - name: Upload Failure Recording Container (.crn)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chronos-failure-recordings
+          path: ${{ inputs.output-dir }}/
+          retention-days: 14
