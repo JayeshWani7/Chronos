@@ -46,6 +46,7 @@ public class ChronosServer {
         server.createContext("/api/diff", new DiffHandler());
         server.createContext("/api/search", new SearchHandler());
         server.createContext("/api/analyze", new AnalyzeHandler());
+        server.createContext("/api/compare", new CompareHandler());
 
         server.setExecutor(null); // default executor
         server.start();
@@ -262,4 +263,42 @@ public class ChronosServer {
             }
         }
     }
+
+    private class CompareHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) {
+                handleOptions(exchange);
+                return;
+            }
+
+            if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+                exchange.sendResponseHeaders(405, -1);
+                return;
+            }
+
+            try {
+                Map<String, String> query = parseQueryParams(exchange.getRequestURI().getQuery());
+                String targetParam = query.get("target");
+                if (targetParam == null || targetParam.isEmpty()) {
+                    sendJson(exchange, 400, Map.of("error", "Missing query parameter: 'target'"));
+                    return;
+                }
+
+                Path basePath = crnPath;
+                String baseParam = query.get("base");
+                if (baseParam != null && !baseParam.isEmpty()) {
+                    basePath = Path.of(baseParam);
+                }
+
+                Path targetPath = Path.of(targetParam);
+
+                com.chronos.replay.CompareResult diff = com.chronos.replay.CompareEngine.compareSessions(basePath, targetPath);
+                sendJson(exchange, 200, diff);
+            } catch (Exception e) {
+                sendJson(exchange, 500, Map.of("error", e.getMessage()));
+            }
+        }
+    }
 }
+

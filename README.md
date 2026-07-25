@@ -10,8 +10,11 @@ Chronos captures the initial DOM snapshot, console logs, network activity, stora
 Chronos/
 ├── agent-js/       # Browser-side JavaScript instrumentation agent (TypeScript + Rollup)
 ├── recorder/       # Java 24 / Spring Boot command line service for CDP capturing & packaging
+├── replay-engine/  # Java library containing state reconstruction, diffing, and AI integration
+├── cli/            # Picocli command-line app containing CLI subcommands and local HTTP server
+├── desktop/        # Tauri 2 + React desktop timeline UI
 ├── schema/         # SQLite schema definitions for the timeline database
-├── samples/        # Test scripts, trigger scripts, and static HTML test pages
+├── samples/        # Test scripts, trigger scripts, Playwright fixtures, and sample recordings
 └── README.md       # Project guide and documentation
 ```
 
@@ -44,38 +47,72 @@ npm run build
 ```
 *Outputs compiled JS to `agent-js/dist/chronos-agent.js`*
 
-### 2. Start Headless Chrome
+### 2. Build the Whole Project
+Run gradle build from the project root:
+```powershell
+.\recorder\gradlew.bat clean assemble
+```
+*Compiles the recorder, replay engine, and builds the CLI fat JAR at `cli/build/libs/cli-1.0.0.jar`.*
+
+### 3. Start Headless Chrome
 Launch Chrome with remote debugging active on port `9222`:
 ```powershell
 Start-Process -FilePath "C:\Program Files\Google\Chrome\Application\chrome.exe" -ArgumentList "--remote-debugging-port=9222 --headless=new --disable-gpu --user-data-dir=$env:TEMP\chrome-profile-spike"
 ```
 
-### 3. Build and Package the Java Recorder
-Navigate to the `recorder` directory and compile the fat executable JAR:
-```powershell
-cd ../recorder
-.\gradlew.bat clean bootJar
-```
-*Outputs compiled binary to `recorder/build/libs/recorder-1.0.0.jar`*
+---
 
-### 4. Run the Recorder Service
-Attach the recorder to the active Chrome instance:
-```powershell
-$env:CHROME_CDP_URL="http://127.0.0.1:9222"
-$env:PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD="1"
-$env:AGENT_JS_PATH="../agent-js/dist/chronos-agent.js"
-java -jar build/libs/recorder-1.0.0.jar ../samples/session.crn
-```
-*Wait for the console to output: `Recorder is running. Press Enter or Ctrl+C to stop...`*
+## CLI Features & Subcommands
 
-### 5. Generate Test Browser Actions
-In a new terminal window, run the test trigger page simulation script:
-```powershell
-cd samples
-node trigger.js
-```
-*This loads the sample page, simulates element clicks/color transitions, and generates event logs intercepted by the recorder.*
+Run subcommands using the fat JAR: `java -jar cli/build/libs/cli-1.0.0.jar [COMMAND] [ARGS]`
 
-### 6. Package Session
-Go back to the terminal running the recorder and press **`Enter`** (or press **`Ctrl+C`**).
-The recorder will stop, write metadata, package the SQLite and delta binary into `samples/session.crn`, and delete the temp directory automatically.
+### 1. E2E Recorder Wrapper (`record`)
+Wrap test suites and conditionally save container only on failures (saves disk space):
+```powershell
+java -jar cli/build/libs/cli-1.0.0.jar record --on-failure-only --out samples/ci_failure.crn -- node samples/trigger_failure.cjs
+```
+
+### 2. State Reconstruction (`replay`)
+Reconstruct page DOM HTML at any timestamp:
+```powershell
+java -jar cli/build/libs/cli-1.0.0.jar replay samples/ci_failure.crn --at 12187 --out state.html
+```
+
+### 3. Timeline Diffing (`diff`)
+Show all events and modifications between two timestamps:
+```powershell
+java -jar cli/build/libs/cli-1.0.0.jar diff samples/ci_failure.crn --from 10000 --to 13000
+```
+
+### 4. Event Querying (`search`)
+Perform timeline queries directly using SQLite search arguments:
+```powershell
+java -jar cli/build/libs/cli-1.0.0.jar search samples/ci_failure.crn --query "console.level = 'error'"
+```
+
+### 5. Gemini AI Root-Cause Analysis (`analyze`)
+Diagnose timelines using generative AI, grounded in events (requires `GEMINI_API_KEY`):
+```powershell
+$env:GEMINI_API_KEY="YOUR_KEY"
+java -jar cli/build/libs/cli-1.0.0.jar analyze samples/ci_failure.crn --from 9000 --to 13000
+```
+
+### 6. Cross-Session Comparison (`compare`)
+Compare DOM, console, network, and storage states between a passing run and a failing run:
+```powershell
+java -jar cli/build/libs/cli-1.0.0.jar compare samples/session.crn samples/ci_failure.crn
+```
+
+### 7. Replay Server (`server`)
+Spin up the local HTTP data backend for the desktop GUI:
+```powershell
+java -jar cli/build/libs/cli-1.0.0.jar server samples/ci_failure.crn --port 8085
+```
+
+---
+
+## Playwright Integration
+
+Chronos includes a first-class Playwright test runner fixture. To use it in Playwright tests:
+1. Import `test` from [chronos-playwright.cjs](file:///C:/Users/priya/OneDrive/Desktop/Chronos/samples/chronos-playwright.cjs).
+2. Use the custom `chronosPage` fixture inside your tests. On test failures, a `.crn` container named after the test is saved to the output directory automatically; on passing runs, it is silently discarded.

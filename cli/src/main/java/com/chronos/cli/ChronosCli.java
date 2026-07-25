@@ -23,7 +23,8 @@ import java.util.concurrent.Callable;
                 ChronosCli.SearchCommand.class,
                 ChronosCli.ServerCommand.class,
                 ChronosCli.RecordCommand.class,
-                ChronosCli.AnalyzeCommand.class
+                ChronosCli.AnalyzeCommand.class,
+                ChronosCli.CompareCommand.class
         })
 public class ChronosCli implements Callable<Integer> {
 
@@ -403,4 +404,76 @@ public class ChronosCli implements Callable<Integer> {
             }
         }
     }
+
+    @Command(name = "compare", description = "Compare DOM, console, network, and storage states between two different session containers.")
+    public static class CompareCommand implements Callable<Integer> {
+        @Parameters(index = "0", description = "Path to the base/passing .crn file.")
+        private File baseFile;
+
+        @Parameters(index = "1", description = "Path to the target/failing .crn file.")
+        private File targetFile;
+
+        @Override
+        public Integer call() {
+            try {
+                if (!baseFile.exists()) {
+                    System.err.println("Error: Base CRN file not found at " + baseFile.getAbsolutePath());
+                    return 1;
+                }
+                if (!targetFile.exists()) {
+                    System.err.println("Error: Target CRN file not found at " + targetFile.getAbsolutePath());
+                    return 1;
+                }
+
+                System.out.println("Comparing sessions: " + baseFile.getName() + " vs " + targetFile.getName() + "...");
+                com.chronos.replay.CompareResult diff = com.chronos.replay.CompareEngine.compareSessions(baseFile.toPath(), targetFile.toPath());
+
+                System.out.println("\n=== CROSS-SESSION COMPARISON RESULTS ===");
+                
+                System.out.println("\n[DOM Differences]");
+                if (diff.domDifferences.isEmpty()) {
+                    System.out.println("  No differences found.");
+                } else {
+                    for (String d : diff.domDifferences) {
+                        System.out.println("  - " + d);
+                    }
+                }
+
+                System.out.println("\n[Console Anomalies]");
+                if (diff.consoleAnomalies.isEmpty()) {
+                    System.out.println("  No warnings/errors unique to target session.");
+                } else {
+                    for (String c : diff.consoleAnomalies) {
+                        System.out.println("  - " + c);
+                    }
+                }
+
+                System.out.println("\n[Network Differences]");
+                if (diff.networkDifferences.isEmpty()) {
+                    System.out.println("  No network changes or unique failures.");
+                } else {
+                    for (String n : diff.networkDifferences) {
+                        System.out.println("  - " + n);
+                    }
+                }
+
+                System.out.println("\n[Storage Differences]");
+                if (diff.storageDifferences.isEmpty()) {
+                    System.out.println("  No differences in cookies, local storage, or session storage.");
+                } else {
+                    for (String s : diff.storageDifferences) {
+                        System.out.println("  - " + s);
+                    }
+                }
+                
+                System.out.println("=========================================\n");
+                return 0;
+            } catch (Exception e) {
+                System.err.println("Comparison failed: " + e.getMessage());
+                e.printStackTrace();
+                return 1;
+            }
+        }
+    }
 }
+
