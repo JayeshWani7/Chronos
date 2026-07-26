@@ -28,12 +28,23 @@ public class ReplayEngine implements AutoCloseable {
     private final Path dbFile;
     private final Path deltasFile;
     private final ObjectMapper mapper = new ObjectMapper();
+    private final java.sql.Connection connection;
 
     public ReplayEngine(Path crnPath) throws IOException {
         this.tempDir = Files.createTempDirectory("chronos-replay-");
         unzip(crnPath, tempDir);
         this.dbFile = tempDir.resolve("timeline.sqlite");
         this.deltasFile = tempDir.resolve("deltas.bin");
+        try {
+            String dbUrl = "jdbc:sqlite:" + dbFile.toAbsolutePath();
+            this.connection = java.sql.DriverManager.getConnection(dbUrl);
+        } catch (java.sql.SQLException e) {
+            throw new IOException("Failed to connect to timeline SQLite database", e);
+        }
+    }
+
+    public java.sql.Connection getConnection() {
+        return connection;
     }
 
     public Path getDbFile() {
@@ -46,37 +57,34 @@ public class ReplayEngine implements AutoCloseable {
 
     public ReplayState reconstructState(long timestampMs) throws Exception {
         ReplayState state = new ReplayState();
-        String dbUrl = "jdbc:sqlite:" + dbFile.toAbsolutePath();
 
         // 1. Fetch nearest preceding snapshot
         long snapshotTs = -1;
         String snapshotPayload = null;
 
-        try (Connection conn = DriverManager.getConnection(dbUrl)) {
-            String sql = "SELECT ts_ms, payload_json FROM events " +
-                         "WHERE category = 'dom' AND type = 'snapshot' AND ts_ms <= ? " +
-                         "ORDER BY ts_ms DESC LIMIT 1";
-            try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-                pstmt.setLong(1, timestampMs);
+        String sql = "SELECT ts_ms, payload_json FROM events " +
+                     "WHERE category = 'dom' AND type = 'snapshot' AND ts_ms <= ? " +
+                     "ORDER BY ts_ms DESC LIMIT 1";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setLong(1, timestampMs);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    snapshotTs = rs.getLong("ts_ms");
+                    snapshotPayload = rs.getString("payload_json");
+                }
+            }
+        }
+
+        // If no snapshot found before timestampMs, load absolute first snapshot
+        if (snapshotPayload == null) {
+            sql = "SELECT ts_ms, payload_json FROM events " +
+                  "WHERE category = 'dom' AND type = 'snapshot' " +
+                  "ORDER BY ts_ms ASC LIMIT 1";
+            try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
                 try (ResultSet rs = pstmt.executeQuery()) {
                     if (rs.next()) {
                         snapshotTs = rs.getLong("ts_ms");
                         snapshotPayload = rs.getString("payload_json");
-                    }
-                }
-            }
-
-            // If no snapshot found before timestampMs, load absolute first snapshot
-            if (snapshotPayload == null) {
-                sql = "SELECT ts_ms, payload_json FROM events " +
-                      "WHERE category = 'dom' AND type = 'snapshot' " +
-                      "ORDER BY ts_ms ASC LIMIT 1";
-                try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-                    try (ResultSet rs = pstmt.executeQuery()) {
-                        if (rs.next()) {
-                            snapshotTs = rs.getLong("ts_ms");
-                            snapshotPayload = rs.getString("payload_json");
-                        }
                     }
                 }
             }
@@ -99,23 +107,21 @@ public class ReplayEngine implements AutoCloseable {
 
         // 3. Query all DOM mutation events from snapshotTs up to timestampMs
         List<MutationEvent> mutations = new ArrayList<>();
-        try (Connection conn = DriverManager.getConnection(dbUrl)) {
-            String sql = "SELECT ts_ms, type, payload_json, delta_offset FROM events " +
-                         "WHERE category = 'dom' AND type LIKE 'mutation_%' " +
-                         "  AND ts_ms > ? AND ts_ms <= ? " +
-                         "ORDER BY ts_ms ASC, id ASC";
-            try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-                pstmt.setLong(1, snapshotTs);
-                pstmt.setLong(2, timestampMs);
-                try (ResultSet rs = pstmt.executeQuery()) {
-                    while (rs.next()) {
-                        MutationEvent ev = new MutationEvent();
-                        ev.tsMs = rs.getLong("ts_ms");
-                        ev.type = rs.getString("type");
-                        ev.payloadJson = rs.getString("payload_json");
-                        ev.deltaOffset = rs.getObject("delta_offset") != null ? rs.getInt("delta_offset") : -1;
-                        mutations.add(ev);
-                    }
+        sql = "SELECT ts_ms, type, payload_json, delta_offset FROM events " +
+              "WHERE category = 'dom' AND type LIKE 'mutation_%' " +
+              "  AND ts_ms > ? AND ts_ms <= ? " +
+              "ORDER BY ts_ms ASC, id ASC";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setLong(1, snapshotTs);
+            pstmt.setLong(2, timestampMs);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    MutationEvent ev = new MutationEvent();
+                    ev.tsMs = rs.getLong("ts_ms");
+                    ev.type = rs.getString("type");
+                    ev.payloadJson = rs.getString("payload_json");
+                    ev.deltaOffset = rs.getObject("delta_offset") != null ? rs.getInt("delta_offset") : -1;
+                    mutations.add(ev);
                 }
             }
         }
@@ -149,84 +155,82 @@ public class ReplayEngine implements AutoCloseable {
         state.html = serializeHtml(rootId, tree, false);
 
         // 6. Reconstruct storage states
-        try (Connection conn = DriverManager.getConnection(dbUrl)) {
-            String sql = "SELECT kind, key, value, op FROM storage_snapshots " +
-                         "WHERE ts_ms <= ? " +
-                         "ORDER BY ts_ms ASC, id ASC";
-            try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-                pstmt.setLong(1, timestampMs);
-                try (ResultSet rs = pstmt.executeQuery()) {
-                    while (rs.next()) {
-                        String kind = rs.getString("kind");
-                        String key = rs.getString("key");
-                        String value = rs.getString("value");
-                        String op = rs.getString("op");
+        sql = "SELECT kind, key, value, op FROM storage_snapshots " +
+              "WHERE ts_ms <= ? " +
+              "ORDER BY ts_ms ASC, id ASC";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setLong(1, timestampMs);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    String kind = rs.getString("kind");
+                    String key = rs.getString("key");
+                    String value = rs.getString("value");
+                    String op = rs.getString("op");
 
-                        Map<String, String> targetMap = null;
-                        if ("localStorage".equals(kind)) {
-                            targetMap = state.localStorage;
-                        } else if ("sessionStorage".equals(kind)) {
-                            targetMap = state.sessionStorage;
-                        } else if ("cookie".equals(kind)) {
-                            targetMap = state.cookies;
-                        }
+                    Map<String, String> targetMap = null;
+                    if ("localStorage".equals(kind)) {
+                        targetMap = state.localStorage;
+                    } else if ("sessionStorage".equals(kind)) {
+                        targetMap = state.sessionStorage;
+                    } else if ("cookie".equals(kind)) {
+                        targetMap = state.cookies;
+                    }
 
-                        if (targetMap != null) {
-                            if ("set".equals(op)) {
-                                targetMap.put(key, value);
-                            } else if ("remove".equals(op)) {
-                                targetMap.remove(key);
-                            } else if ("clear".equals(op)) {
-                                targetMap.clear();
-                            }
+                    if (targetMap != null) {
+                        if ("set".equals(op)) {
+                            targetMap.put(key, value);
+                        } else if ("remove".equals(op)) {
+                            targetMap.remove(key);
+                        } else if ("clear".equals(op)) {
+                            targetMap.clear();
                         }
                     }
                 }
             }
+        }
 
-            // 7. Load console logs
-            sql = "SELECT id, ts_ms, level, message, stack FROM console_logs " +
-                  "WHERE ts_ms <= ? " +
-                  "ORDER BY ts_ms ASC, id ASC";
-            try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-                pstmt.setLong(1, timestampMs);
-                try (ResultSet rs = pstmt.executeQuery()) {
-                    while (rs.next()) {
-                        state.consoleLogs.add(new ConsoleLog(
-                            rs.getInt("id"),
-                            rs.getLong("ts_ms"),
-                            rs.getString("level"),
-                            rs.getString("message"),
-                            rs.getString("stack")
-                        ));
-                    }
+        // 7. Load console logs
+        sql = "SELECT id, ts_ms, level, message, stack FROM console_logs " +
+              "WHERE ts_ms <= ? " +
+              "ORDER BY ts_ms ASC, id ASC";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setLong(1, timestampMs);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    state.consoleLogs.add(new ConsoleLog(
+                        rs.getInt("id"),
+                        rs.getLong("ts_ms"),
+                        rs.getString("level"),
+                        rs.getString("message"),
+                        rs.getString("stack")
+                    ));
                 }
             }
+        }
 
-            // 8. Load network requests
-            sql = "SELECT id, ts_start_ms, ts_end_ms, method, url, status, request_headers, response_headers, body_ref, timing_json, initiator, size_bytes " +
-                  "FROM network_requests " +
-                  "WHERE ts_start_ms <= ? " +
-                  "ORDER BY ts_start_ms ASC, id ASC";
-            try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-                pstmt.setLong(1, timestampMs);
-                try (ResultSet rs = pstmt.executeQuery()) {
-                    while (rs.next()) {
-                        NetworkRequest req = new NetworkRequest();
-                        req.id = rs.getInt("id");
-                        req.tsStartMs = rs.getLong("ts_start_ms");
-                        req.tsEndMs = rs.getLong("ts_end_ms");
-                        req.method = rs.getString("method");
-                        req.url = rs.getString("url");
-                        req.status = rs.getInt("status");
-                        req.requestHeaders = rs.getString("request_headers");
-                        req.responseHeaders = rs.getString("response_headers");
-                        req.bodyRef = rs.getString("body_ref");
-                        req.timingJson = rs.getString("timing_json");
-                        req.initiator = rs.getString("initiator");
-                        req.sizeBytes = rs.getInt("size_bytes");
-                        state.networkRequests.add(req);
-                    }
+        // 8. Load network requests
+        sql = "SELECT id, ts_start_ms, ts_end_ms, method, url, status, request_headers, response_headers, body_ref, timing_json, initiator, size_bytes " +
+              "FROM network_requests " +
+              "WHERE ts_start_ms <= ? " +
+              "ORDER BY ts_start_ms ASC, id ASC";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setLong(1, timestampMs);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    NetworkRequest req = new NetworkRequest();
+                    req.id = rs.getInt("id");
+                    req.tsStartMs = rs.getLong("ts_start_ms");
+                    req.tsEndMs = rs.getLong("ts_end_ms");
+                    req.method = rs.getString("method");
+                    req.url = rs.getString("url");
+                    req.status = rs.getInt("status");
+                    req.requestHeaders = rs.getString("request_headers");
+                    req.responseHeaders = rs.getString("response_headers");
+                    req.bodyRef = rs.getString("body_ref");
+                    req.timingJson = rs.getString("timing_json");
+                    req.initiator = rs.getString("initiator");
+                    req.sizeBytes = rs.getInt("size_bytes");
+                    state.networkRequests.add(req);
                 }
             }
         }
@@ -407,6 +411,13 @@ public class ReplayEngine implements AutoCloseable {
 
     @Override
     public void close() throws Exception {
+        if (connection != null) {
+            try {
+                connection.close();
+            } catch (Exception e) {
+                // Ignore
+            }
+        }
         deleteDir(tempDir.toFile());
     }
 
