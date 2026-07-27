@@ -4,7 +4,91 @@ Chronos captures the initial DOM snapshot, console logs, network activity, stora
 
 ---
 
-## Project Structure
+## 🚀 Quick Startup Guide (Step-by-Step)
+
+Follow these step-by-step instructions to set up, build, record, and run Chronos on your machine:
+
+### Step 1: Clone & Install Dependencies
+Ensure you have **Node.js (v18+)**, **Java 21/24 (JDK)**, and **Google Chrome** installed.
+
+```bash
+# Clone the repository
+git clone https://github.com/JayeshWani7/Chronos.git
+cd Chronos
+
+# Create local environment configuration from template
+copy .env.example .env
+```
+
+---
+
+### Step 2: Build the JavaScript Browser Agent (`agent-js`)
+Compile the browser-side DOM/Network/Console instrumentation agent script:
+```powershell
+cd agent-js
+npm install
+npm run build
+cd ..
+```
+*Creates the bundled agent at `agent-js/dist/chronos-agent.js`.*
+
+---
+
+### Step 3: Build Java Modules & CLI Fat JAR (`cli`)
+Compile the recorder, replay engine, and CLI Fat JAR:
+```powershell
+.\recorder\gradlew.bat assemble
+```
+*Generates the executable Fat JAR at `cli/build/libs/cli-1.0.0.jar`.*
+
+---
+
+### Step 4: Start Headless Chrome with CDP Enabled
+Launch Chrome with Chrome DevTools Protocol (CDP) listening on port `9222`:
+
+- **Windows (PowerShell)**:
+  ```powershell
+  Start-Process -FilePath "C:\Program Files\Google\Chrome\Application\chrome.exe" -ArgumentList "--remote-debugging-port=9222 --headless=new --disable-gpu --user-data-dir=$env:TEMP\chrome-profile-ci"
+  ```
+- **Linux / macOS**:
+  ```bash
+  google-chrome --remote-debugging-port=9222 --headless=new --disable-gpu --user-data-dir=/tmp/chrome-profile-ci &
+  ```
+
+---
+
+### Step 5: Record a Session Container (`.crn`)
+Record a browser script or test suite execution and package it into a compressed `.crn` container:
+```powershell
+java -jar cli/build/libs/cli-1.0.0.jar record --out samples/new_session.crn -- node samples/trigger.js
+```
+*Creates `samples/new_session.crn` containing timeline databases, deltas, and snapshots.*
+
+---
+
+### Step 6: Start the Desktop Time-Travel Debugger UI (`desktop`)
+Launch the React + Vite desktop debugging application:
+```powershell
+cd desktop
+npm install
+npm run dev
+```
+
+1. Open `http://localhost:5173` in your browser.
+2. In the top path bar, enter the absolute path to your `.crn` file (e.g. `C:\Users\priya\OneDrive\Desktop\Chronos\samples\new_session.crn`).
+3. Click **Open Session** to start time-travel debugging!
+
+---
+
+### Step 7 (Optional): Run Backend Replay Server Directly
+If you want to spin up the local HTTP replay backend standalone without the desktop app:
+```powershell
+java -jar cli/build/libs/cli-1.0.0.jar server samples/new_session.crn --port 8085
+```
+
+---
+
+## 📁 Project Structure
 
 ```text
 Chronos/
@@ -20,7 +104,7 @@ Chronos/
 
 ---
 
-## Core Container Architecture (`.crn`)
+## 📦 Core Container Architecture (`.crn`)
 
 Chronos compiles recorded sessions into a single compressed `.crn` (Chronos Recording Network) container file. A `.crn` file is a ZIP archive containing:
 
@@ -36,33 +120,7 @@ Chronos compiles recorded sessions into a single compressed `.crn` (Chronos Reco
 
 ---
 
-## Build & Testing Guide
-
-### 1. Compile the JavaScript Agent
-The browser agent monitors DOM changes, console logs, network calls, and input events. Build the bundled script first:
-```bash
-cd agent-js
-npm install
-npm run build
-```
-*Outputs compiled JS to `agent-js/dist/chronos-agent.js`*
-
-### 2. Build the Whole Project
-Run gradle build from the project root:
-```powershell
-.\recorder\gradlew.bat clean assemble
-```
-*Compiles the recorder, replay engine, and builds the CLI fat JAR at `cli/build/libs/cli-1.0.0.jar`.*
-
-### 3. Start Headless Chrome
-Launch Chrome with remote debugging active on port `9222`:
-```powershell
-Start-Process -FilePath "C:\Program Files\Google\Chrome\Application\chrome.exe" -ArgumentList "--remote-debugging-port=9222 --headless=new --disable-gpu --user-data-dir=$env:TEMP\chrome-profile-spike"
-```
-
----
-
-## CLI Features & Subcommands
+## 🛠️ CLI Features & Subcommands
 
 Run subcommands using the fat JAR: `java -jar cli/build/libs/cli-1.0.0.jar [COMMAND] [ARGS]`
 
@@ -111,7 +169,7 @@ java -jar cli/build/libs/cli-1.0.0.jar server samples/ci_failure.crn --port 8085
 
 ---
 
-## Playwright Integration
+## 🎭 Playwright Integration
 
 Chronos includes a first-class Playwright test runner fixture. To use it in Playwright tests:
 1. Import `test` from [chronos-playwright.cjs](file:///C:/Users/priya/OneDrive/Desktop/Chronos/samples/chronos-playwright.cjs).

@@ -4,6 +4,7 @@ import com.chronos.recorder.cdp.CdpManager;
 import com.chronos.recorder.storage.DeltaWriter;
 import com.chronos.recorder.storage.TimelineSqlite;
 import com.chronos.recorder.storage.CrnPackager;
+import com.chronos.replay.DotEnvLoader;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -24,20 +25,14 @@ public class App implements CommandLineRunner {
     public void run(String... args) throws Exception {
         System.out.println("=== Chronos Recorder Service starting ===");
 
-        String cdpUrl = System.getenv("CHROME_CDP_URL");
-        if (cdpUrl == null || cdpUrl.isEmpty()) {
-            cdpUrl = "http://localhost:9222";
-        }
+        String cdpUrl = DotEnvLoader.get("CHROME_CDP_URL", "http://127.0.0.1:9222");
 
         String outputCrn = "./session.crn";
         if (args.length > 0) {
             outputCrn = args[0];
         }
 
-        String agentPath = "../agent-js/dist/chronos-agent.js";
-        if (System.getenv("AGENT_JS_PATH") != null) {
-            agentPath = System.getenv("AGENT_JS_PATH");
-        }
+        String agentPath = DotEnvLoader.get("AGENT_JS_PATH", "../agent-js/dist/chronos-agent.js");
 
         File agentFile = new File(agentPath);
         if (!agentFile.exists()) {
@@ -46,11 +41,8 @@ public class App implements CommandLineRunner {
             return;
         }
 
-        File tempDir = new File("./session-temp");
-        if (tempDir.exists()) {
-            deleteDir(tempDir);
-        }
-        tempDir.mkdirs();
+        File tempDir = Files.createTempDirectory("chronos-session-").toFile();
+        tempDir.deleteOnExit();
 
         File dbFile = new File(tempDir, "timeline.sqlite");
         File deltasFile = new File(tempDir, "deltas.bin");

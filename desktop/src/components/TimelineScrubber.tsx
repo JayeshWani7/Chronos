@@ -30,131 +30,145 @@ export const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
   const [isDraggingPlayhead, setIsDraggingPlayhead] = useState(false);
   const [isDraggingSelection, setIsDraggingSelection] = useState<'none' | 'start' | 'end' | 'both'>('none');
 
-  const duration = Math.max(sessionDuration, 1000); // minimum 1s
+  const duration = Math.max(sessionDuration, 1000);
 
-  // Canvas drawing lifecycle
+  // High performance Canvas drawing lifecycle
   useEffect(() => {
-    const canvas = canvasRef.current;
-    const container = containerRef.current;
-    if (!canvas || !container) return;
+    let animationFrameId: number;
 
-    // Set canvas sizes based on bounding box (handling high-DPI displays)
-    const rect = container.getBoundingClientRect();
-    const width = rect.width;
-    const height = 90; // Fixed scrubber height
-    const dpr = window.devicePixelRatio || 1;
+    const renderCanvas = () => {
+      const canvas = canvasRef.current;
+      const container = containerRef.current;
+      if (!canvas || !container) return;
 
-    canvas.width = width * dpr;
-    canvas.height = height * dpr;
-    canvas.style.width = `${width}px`;
-    canvas.style.height = `${height}px`;
+      const rect = container.getBoundingClientRect();
+      const width = rect.width;
+      const height = 90;
+      const dpr = window.devicePixelRatio || 1;
 
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.scale(dpr, dpr);
+      canvas.width = width * dpr;
+      canvas.height = height * dpr;
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
 
-    // Clear background
-    ctx.fillStyle = '#161b22';
-    ctx.fillRect(0, 0, width, height);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      ctx.scale(dpr, dpr);
 
-    // Draw grid & ticks
-    ctx.strokeStyle = '#30363d';
-    ctx.lineWidth = 1;
-    ctx.fillStyle = '#8b949e';
-    ctx.font = '10px sans-serif';
+      // Read CSS variable background if available
+      const computedStyle = getComputedStyle(container);
+      const bgSecondary = computedStyle.getPropertyValue('--bg-secondary').trim() || '#111726';
+      const borderColor = computedStyle.getPropertyValue('--border-color').trim() || '#232e42';
+      const textMuted = computedStyle.getPropertyValue('--color-muted').trim() || '#8492a6';
+      const accentColor = computedStyle.getPropertyValue('--accent-color').trim() || '#00a3ff';
 
-    const tickSpacing = width > 800 ? 5000 : 10000; // Ticks every 5s or 10s
-    const tickCount = Math.ceil(duration / tickSpacing);
+      // Clear background
+      ctx.fillStyle = bgSecondary;
+      ctx.fillRect(0, 0, width, height);
 
-    for (let i = 0; i <= tickCount; i++) {
-      const ts = i * tickSpacing;
-      if (ts > duration) break;
-      const x = (ts / duration) * width;
+      // Draw grid ticks
+      ctx.strokeStyle = borderColor;
+      ctx.lineWidth = 1;
+      ctx.fillStyle = textMuted;
+      ctx.font = '10px JetBrains Mono, monospace';
 
+      const tickSpacing = width > 800 ? 5000 : 10000;
+      const tickCount = Math.ceil(duration / tickSpacing);
+
+      for (let i = 0; i <= tickCount; i++) {
+        const ts = i * tickSpacing;
+        if (ts > duration) break;
+        const x = (ts / duration) * width;
+
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, height);
+        ctx.stroke();
+
+        const label = `${(ts / 1000).toFixed(0)}s`;
+        ctx.fillText(label, x + 4, 14);
+      }
+
+      // Draw Selection Range Window Highlight
+      if (selectionRange) {
+        const xStart = (selectionRange.from / duration) * width;
+        const xEnd = (selectionRange.to / duration) * width;
+
+        ctx.fillStyle = 'rgba(0, 163, 255, 0.15)';
+        ctx.fillRect(xStart, 0, xEnd - xStart, height);
+
+        ctx.strokeStyle = accentColor;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(xStart, 0);
+        ctx.lineTo(xStart, height);
+        ctx.moveTo(xEnd, 0);
+        ctx.lineTo(xEnd, height);
+        ctx.stroke();
+      }
+
+      // Draw Lanes
+      const drawEventMark = (x: number, y: number, color: string, radius: number = 3) => {
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        ctx.fill();
+      };
+
+      events.forEach(evt => {
+        const x = (evt.ts_ms / duration) * width;
+        if (x < 0 || x > width) return;
+
+        if (evt.category === 'network') {
+          const isError = evt.payload && evt.payload.status >= 400;
+          drawEventMark(x, 30, isError ? '#ff4d4f' : '#10b981');
+        } else if (evt.category === 'console') {
+          const isError = evt.type === 'error' || evt.type === 'exception';
+          drawEventMark(x, 45, isError ? '#ff4d4f' : '#f59e0b');
+        } else if (evt.category === 'dom' && evt.type.startsWith('mutation_')) {
+          drawEventMark(x, 60, '#00a3ff', 2);
+        } else if (evt.category === 'input') {
+          drawEventMark(x, 75, '#ff6b00');
+        }
+      });
+
+      // Overlay Track Labels on Left
+      ctx.fillStyle = bgSecondary;
+      ctx.globalAlpha = 0.85;
+      ctx.fillRect(4, 22, 54, 60);
+      ctx.globalAlpha = 1.0;
+
+      ctx.fillStyle = textMuted;
+      ctx.font = '9px Inter, sans-serif';
+      ctx.fillText('Network', 6, 33);
+      ctx.fillText('Console', 6, 48);
+      ctx.fillText('Mutations', 6, 63);
+      ctx.fillText('Inputs', 6, 78);
+
+      // Draw Playhead Indicator
+      const playheadX = (currentPlayhead / duration) * width;
+      ctx.strokeStyle = '#ff4d4f';
+      ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, height);
+      ctx.moveTo(playheadX, 0);
+      ctx.lineTo(playheadX, height);
       ctx.stroke();
 
-      // Labels
-      const label = `${(ts / 1000).toFixed(0)}s`;
-      ctx.fillText(label, x + 4, 15);
-    }
-
-    // Draw Selection Range Highlight
-    if (selectionRange) {
-      const xStart = (selectionRange.from / duration) * width;
-      const xEnd = (selectionRange.to / duration) * width;
-
-      ctx.fillStyle = 'rgba(91, 141, 239, 0.15)';
-      ctx.fillRect(xStart, 0, xEnd - xStart, height);
-
-      // Borders
-      ctx.strokeStyle = '#5b8def';
-      ctx.lineWidth = 1.5;
+      // Playhead Top Triangle
+      ctx.fillStyle = '#ff4d4f';
       ctx.beginPath();
-      ctx.moveTo(xStart, 0);
-      ctx.lineTo(xStart, height);
-      ctx.moveTo(xEnd, 0);
-      ctx.lineTo(xEnd, height);
-      ctx.stroke();
-    }
-
-    // Draw Lanes
-
-    const drawEventMark = (x: number, y: number, color: string, radius: number = 3) => {
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.moveTo(playheadX - 6, 0);
+      ctx.lineTo(playheadX + 6, 0);
+      ctx.lineTo(playheadX, 8);
+      ctx.closePath();
       ctx.fill();
     };
 
-    events.forEach(evt => {
-      const x = (evt.ts_ms / duration) * width;
-      if (x < 0 || x > width) return;
+    animationFrameId = requestAnimationFrame(renderCanvas);
 
-      if (evt.category === 'network') {
-        const isError = evt.payload && evt.payload.status >= 400;
-        drawEventMark(x, 30, isError ? '#f85149' : '#3fb950');
-      } else if (evt.category === 'console') {
-        const isError = evt.type === 'error' || evt.type === 'exception';
-        drawEventMark(x, 45, isError ? '#f85149' : '#d29922');
-      } else if (evt.category === 'dom' && evt.type.startsWith('mutation_')) {
-        drawEventMark(x, 60, '#58a6ff', 2);
-      } else if (evt.category === 'input') {
-        drawEventMark(x, 75, '#ff7b72');
-      }
-    });
-
-    // Draw Lane Labels on Left (Floating/overlayed with transparent background)
-    ctx.fillStyle = 'rgba(22, 27, 34, 0.8)';
-    ctx.fillRect(4, 22, 50, 60);
-
-    ctx.fillStyle = '#8b949e';
-    ctx.font = '9px sans-serif';
-    ctx.fillText('Network', 6, 33);
-    ctx.fillText('Console', 6, 48);
-    ctx.fillText('Mutations', 6, 63);
-    ctx.fillText('Inputs', 6, 78);
-
-    // Draw Playhead
-    const playheadX = (currentPlayhead / duration) * width;
-    ctx.strokeStyle = '#f85149';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(playheadX, 0);
-    ctx.lineTo(playheadX, height);
-    ctx.stroke();
-
-    // Draw Playhead Handle Triangle
-    ctx.fillStyle = '#f85149';
-    ctx.beginPath();
-    ctx.moveTo(playheadX - 6, 0);
-    ctx.lineTo(playheadX + 6, 0);
-    ctx.lineTo(playheadX, 8);
-    ctx.closePath();
-    ctx.fill();
-
+    return () => {
+      cancelAnimationFrame(animationFrameId);
+    };
   }, [events, currentPlayhead, duration, selectionRange]);
 
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -164,7 +178,6 @@ export const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
     const x = e.clientX - rect.left;
     const ts = (x / rect.width) * duration;
 
-    // Check if clicking near selection boundaries
     if (selectionRange) {
       const xStart = (selectionRange.from / duration) * rect.width;
       const xEnd = (selectionRange.to / duration) * rect.width;
@@ -179,10 +192,8 @@ export const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
       }
     }
 
-    // Check if dragging range selection via Shift+Click
     if (e.shiftKey) {
       if (selectionRange) {
-        // Toggle/expand selection
         onChangeSelectionRange({ from: Math.min(selectionRange.from, ts), to: Math.max(selectionRange.to, ts) });
       } else {
         onChangeSelectionRange({ from: Math.max(0, ts - 500), to: Math.min(duration, ts + 500) });
@@ -190,9 +201,8 @@ export const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
       return;
     }
 
-    // Else drag playhead
     setIsDraggingPlayhead(true);
-    onChangePlayhead(Math.max(0, Math.min(duration, ts)));
+    onChangePlayhead(Math.round(Math.max(0, Math.min(duration, ts))));
   };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -200,14 +210,14 @@ export const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
-    const ts = Math.max(0, Math.min(duration, (x / rect.width) * duration));
+    const ts = Math.round(Math.max(0, Math.min(duration, (x / rect.width) * duration)));
 
     if (isDraggingPlayhead) {
       onChangePlayhead(ts);
     } else if (isDraggingSelection === 'start' && selectionRange) {
-      onChangeSelectionRange({ from: Math.min(ts, selectionRange.to), to: selectionRange.to });
+      onChangeSelectionRange({ from: Math.round(Math.min(ts, selectionRange.to)), to: selectionRange.to });
     } else if (isDraggingSelection === 'end' && selectionRange) {
-      onChangeSelectionRange({ from: selectionRange.from, to: Math.max(ts, selectionRange.from) });
+      onChangeSelectionRange({ from: selectionRange.from, to: Math.round(Math.max(ts, selectionRange.from)) });
     }
   };
 
@@ -223,8 +233,8 @@ export const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
         position: 'relative',
         width: '100%',
         height: '90px',
-        borderBottom: '1px solid #30363d',
-        backgroundColor: '#161b22',
+        borderBottom: '1px solid var(--border-color)',
+        backgroundColor: 'var(--bg-secondary)',
         cursor: isDraggingSelection !== 'none' ? 'col-resize' : 'pointer',
       }}
     >

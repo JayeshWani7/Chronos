@@ -240,7 +240,7 @@ public class ChronosServer {
                 long from = (long) Double.parseDouble(queryParams.get("from"));
                 long to = (long) Double.parseDouble(queryParams.get("to"));
                 
-                String apiKey = System.getenv("GEMINI_API_KEY");
+                String apiKey = com.chronos.replay.DotEnvLoader.get("GEMINI_API_KEY");
                 if (apiKey == null || apiKey.isEmpty()) {
                     sendJson(exchange, 400, Map.of("error", "GEMINI_API_KEY environment variable is not configured on the local host. Please set it before running the AI analyzer."));
                     return;

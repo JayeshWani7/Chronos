@@ -385,9 +385,9 @@ public class ChronosCli implements Callable<Integer> {
                     return 1;
                 }
 
-                String apiKey = System.getenv("GEMINI_API_KEY");
+                String apiKey = com.chronos.replay.DotEnvLoader.get("GEMINI_API_KEY");
                 if (apiKey == null || apiKey.isEmpty()) {
-                    System.err.println("Error: GEMINI_API_KEY environment variable is not set.");
+                    System.err.println("Error: GEMINI_API_KEY environment variable is not set (check .env file or environment).");
                     return 1;
                 }
 

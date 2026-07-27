@@ -45,7 +45,14 @@ public class CdpManager {
         playwright = Playwright.create();
         
         System.out.println("Connecting to Chrome over CDP: " + chromeCdpUrl);
-        browser = playwright.chromium().connectOverCDP(chromeCdpUrl);
+        try {
+            browser = playwright.chromium().connectOverCDP(chromeCdpUrl);
+        } catch (Exception e) {
+            System.out.println("CDP connection unavailable on " + chromeCdpUrl + ". Launching internal Chromium browser with CDP port 9222...");
+            browser = playwright.chromium().launch(new com.microsoft.playwright.BrowserType.LaunchOptions()
+                .setArgs(java.util.List.of("--remote-debugging-port=9222"))
+                .setHeadless(true));
+        }
         
         if (browser.contexts().isEmpty()) {
             context = browser.newContext();
