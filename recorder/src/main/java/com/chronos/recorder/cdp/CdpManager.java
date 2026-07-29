@@ -21,6 +21,7 @@ public class CdpManager {
     private BrowserContext context;
     private Page page;
     private DeltaWriter deltaWriter;
+    private String targetTabUrl;
 
     private long sessionStartTime = -1;
 
@@ -33,13 +34,36 @@ public class CdpManager {
         this.deltaWriter = deltaWriter;
     }
 
+    public void setTargetTabUrl(String targetTabUrl) {
+        this.targetTabUrl = targetTabUrl;
+    }
+
     public void start(String agentScriptPath) {
         this.sessionStartTime = System.currentTimeMillis();
-        String agentCode;
-        try {
-            agentCode = Files.readString(Paths.get(agentScriptPath));
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to read agent script from: " + agentScriptPath, e);
+        String agentCode = null;
+        
+        java.util.List<java.nio.file.Path> candidates = java.util.List.of(
+            java.nio.file.Paths.get(agentScriptPath),
+            java.nio.file.Paths.get("agent-js/dist/chronos-agent.js"),
+            java.nio.file.Paths.get("../agent-js/dist/chronos-agent.js"),
+            java.nio.file.Paths.get("../../agent-js/dist/chronos-agent.js"),
+            java.nio.file.Paths.get("C:\\Users\\priya\\OneDrive\\Desktop\\Chronos\\agent-js\\dist\\chronos-agent.js")
+        );
+
+        IOException lastEx = null;
+        for (java.nio.file.Path p : candidates) {
+            if (java.nio.file.Files.exists(p)) {
+                try {
+                    agentCode = java.nio.file.Files.readString(p);
+                    break;
+                } catch (IOException e) {
+                    lastEx = e;
+                }
+            }
+        }
+
+        if (agentCode == null) {
+            throw new RuntimeException("Agent script not found at candidate paths. Tried: " + candidates, lastEx);
         }
 
         playwright = Playwright.create();
@@ -72,9 +96,17 @@ public class CdpManager {
             page = context.newPage();
         } else {
             page = context.pages().get(0);
+            if (targetTabUrl != null && !targetTabUrl.isEmpty()) {
+                for (Page p : context.pages()) {
+                    if (p.url().contains(targetTabUrl)) {
+                        page = p;
+                        break;
+                    }
+                }
+            }
         }
         
-        System.out.println("CdpManager initialized. Injection hooks active.");
+        System.out.println("CdpManager initialized. Injection hooks active on target page: " + page.url());
     }
 
     private void handleAgentEvent(String jsonEvent) {

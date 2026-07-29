@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Terminal, Activity, Database, RefreshCw, Cpu, Bot, Search } from 'lucide-react';
+import { Terminal, Activity, Database, RefreshCw, Cpu, Bot, Search, GitCompare } from 'lucide-react';
 import { AiInsightPane } from './AiInsightPane';
 
 interface ConsoleLog {
@@ -27,6 +27,7 @@ interface NetworkRequest {
 
 interface TabsPaneProps {
   apiPort: number | null;
+  filePath: string;
   activeTab: string;
   onChangeTab: (tab: string) => void;
   consoleLogs: ConsoleLog[];
@@ -42,6 +43,7 @@ interface TabsPaneProps {
 
 export const TabsPane: React.FC<TabsPaneProps> = ({
   apiPort,
+  filePath,
   activeTab,
   onChangeTab,
   consoleLogs,
@@ -55,6 +57,11 @@ export const TabsPane: React.FC<TabsPaneProps> = ({
   const [selectedRequest, setSelectedRequest] = useState<NetworkRequest | null>(null);
   const [diffResult, setDiffResult] = useState<any>(null);
   const [isDiffLoading, setIsDiffLoading] = useState(false);
+
+  // Compare Sessions States
+  const [basePath, setBasePath] = useState('C:\\Users\\priya\\OneDrive\\Desktop\\Chronos\\samples\\session.crn');
+  const [compareResult, setCompareResult] = useState<any>(null);
+  const [isCompareLoading, setIsCompareLoading] = useState(false);
 
   // Filters & Search states
   const [consoleLogLevel, setConsoleLogLevel] = useState<string>('all');
@@ -119,6 +126,9 @@ export const TabsPane: React.FC<TabsPaneProps> = ({
         </button>
         <button className={`tab-btn ${activeTab === 'diff' ? 'active' : ''}`} onClick={() => onChangeTab('diff')}>
           <RefreshCw size={14} /> Diff
+        </button>
+        <button className={`tab-btn ${activeTab === 'compare' ? 'active' : ''}`} onClick={() => onChangeTab('compare')}>
+          <GitCompare size={14} /> Compare Sessions
         </button>
         <button className={`tab-btn ${activeTab === 'ai' ? 'active' : ''}`} onClick={() => onChangeTab('ai')}>
           <Bot size={14} /> AI Insight
@@ -450,6 +460,102 @@ export const TabsPane: React.FC<TabsPaneProps> = ({
               <div className="empty-state">
                 <div className="empty-title">Error computing diff</div>
                 <div className="empty-desc">{diffResult?.error || 'Failed to load diff.'}</div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* COMPARE SESSIONS TAB */}
+        {activeTab === 'compare' && (
+          <div style={{ padding: '16px', overflow: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', background: 'var(--bg-secondary)', padding: '12px', border: '1px solid var(--border-color)', borderRadius: '6px' }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: 'var(--color-muted)', marginBottom: '4px' }}>PASSING BASELINE SESSION FILE PATH</label>
+                <input
+                  type="text"
+                  className="search-input"
+                  placeholder="Path to baseline .crn file..."
+                  value={basePath}
+                  onChange={(e) => setBasePath(e.target.value)}
+                  style={{ width: '100%' }}
+                />
+              </div>
+              <button
+                className="btn btn-primary"
+                onClick={() => {
+                  if (!basePath.trim() || !apiPort) return;
+                  setIsCompareLoading(true);
+                  setCompareResult(null);
+                  fetch(`http://localhost:${apiPort}/api/compare?base=${encodeURIComponent(basePath)}&target=${encodeURIComponent(filePath)}`)
+                    .then(res => res.json())
+                    .then(data => {
+                      setCompareResult(data);
+                      setIsCompareLoading(false);
+                    })
+                    .catch(err => {
+                      console.error(err);
+                      setCompareResult({ error: err.message || 'Failed to compare sessions' });
+                      setIsCompareLoading(false);
+                    });
+                }}
+                disabled={isCompareLoading}
+                style={{ alignSelf: 'flex-end', height: '32px' }}
+              >
+                {isCompareLoading ? 'Comparing...' : 'Compare Sessions'}
+              </button>
+            </div>
+
+            {compareResult && compareResult.error && (
+              <div style={{ color: 'var(--color-error)', background: 'rgba(255, 0, 0, 0.1)', padding: '12px', borderRadius: '6px', fontSize: '12px' }}>
+                <strong>Comparison Error:</strong> {compareResult.error}
+              </div>
+            )}
+
+            {compareResult && !compareResult.error && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div>
+                  <h4 style={{ margin: '0 0 8px 0', color: 'var(--color-success)', fontSize: '12px', textTransform: 'uppercase' }}>DOM DIFFERENCES</h4>
+                  {!compareResult.domDifferences || compareResult.domDifferences.length === 0 ? (
+                    <div style={{ color: 'var(--color-muted)', fontSize: '12px' }}>No DOM structural mismatches between the two sessions.</div>
+                  ) : (
+                    compareResult.domDifferences.map((d: string, i: number) => (
+                      <div key={i} style={{ fontSize: '12px', fontFamily: 'var(--font-mono)', margin: '4px 0', color: 'var(--color-text)' }}>• {d}</div>
+                    ))
+                  )}
+                </div>
+
+                <div>
+                  <h4 style={{ margin: '0 0 8px 0', color: 'var(--color-warning)', fontSize: '12px', textTransform: 'uppercase' }}>CONSOLE ANOMALIES</h4>
+                  {!compareResult.consoleAnomalies || compareResult.consoleAnomalies.length === 0 ? (
+                    <div style={{ color: 'var(--color-muted)', fontSize: '12px' }}>No console log anomalies or new warning/error logs detected.</div>
+                  ) : (
+                    compareResult.consoleAnomalies.map((c: string, i: number) => (
+                      <div key={i} style={{ fontSize: '12px', fontFamily: 'var(--font-mono)', margin: '4px 0', color: 'var(--color-text)' }}>• {c}</div>
+                    ))
+                  )}
+                </div>
+
+                <div>
+                  <h4 style={{ margin: '0 0 8px 0', color: 'var(--color-info)', fontSize: '12px', textTransform: 'uppercase' }}>NETWORK DIFFERENCES</h4>
+                  {!compareResult.networkDifferences || compareResult.networkDifferences.length === 0 ? (
+                    <div style={{ color: 'var(--color-muted)', fontSize: '12px' }}>No network request mismatches or unique failures.</div>
+                  ) : (
+                    compareResult.networkDifferences.map((n: string, i: number) => (
+                      <div key={i} style={{ fontSize: '12px', fontFamily: 'var(--font-mono)', margin: '4px 0', color: 'var(--color-text)' }}>• {n}</div>
+                    ))
+                  )}
+                </div>
+
+                <div>
+                  <h4 style={{ margin: '0 0 8px 0', color: '#a855f7', fontSize: '12px', textTransform: 'uppercase' }}>STORAGE DIFFERENCES</h4>
+                  {!compareResult.storageDifferences || compareResult.storageDifferences.length === 0 ? (
+                    <div style={{ color: 'var(--color-muted)', fontSize: '12px' }}>No cookies, localStorage, or sessionStorage differences.</div>
+                  ) : (
+                    compareResult.storageDifferences.map((s: string, i: number) => (
+                      <div key={i} style={{ fontSize: '12px', fontFamily: 'var(--font-mono)', margin: '4px 0', color: 'var(--color-text)' }}>• {s}</div>
+                    ))
+                  )}
+                </div>
               </div>
             )}
           </div>

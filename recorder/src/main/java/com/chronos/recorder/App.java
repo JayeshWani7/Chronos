@@ -57,6 +57,10 @@ public class App implements CommandLineRunner {
         Files.writeString(metaFile.toPath(), metadataJson);
 
         CdpManager cdp = new CdpManager(cdpUrl, db);
+        String targetTabUrl = DotEnvLoader.get("CHROME_TARGET_TAB_URL", "");
+        if (targetTabUrl != null && !targetTabUrl.isEmpty()) {
+            cdp.setTargetTabUrl(targetTabUrl);
+        }
         DeltaWriter deltaWriter = new DeltaWriter(deltasFile.toPath());
         cdp.setDeltaWriter(deltaWriter);
 

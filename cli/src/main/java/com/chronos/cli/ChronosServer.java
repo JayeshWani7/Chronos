@@ -13,6 +13,10 @@ import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -25,11 +29,12 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 
 public class ChronosServer {
-    private final Path crnPath;
+    private Path crnPath;
     private final int port;
     private HttpServer server;
     private ReplayEngine replayEngine;
     private final ObjectMapper mapper = new ObjectMapper();
+    private static com.chronos.recorder.ChronosSession activeSession;
 
     public ChronosServer(Path crnPath, int port) {
         this.crnPath = crnPath;
@@ -47,6 +52,10 @@ public class ChronosServer {
         server.createContext("/api/search", new SearchHandler());
         server.createContext("/api/analyze", new AnalyzeHandler());
         server.createContext("/api/compare", new CompareHandler());
+        server.createContext("/api/session/load", new SessionLoadHandler());
+        server.createContext("/api/record/tabs", new RecordTabsHandler());
+        server.createContext("/api/record/start", new RecordStartHandler());
+        server.createContext("/api/record/stop", new RecordStopHandler());
 
         server.setExecutor(null); // default executor
         server.start();
@@ -297,6 +306,142 @@ public class ChronosServer {
                 sendJson(exchange, 200, diff);
             } catch (Exception e) {
                 sendJson(exchange, 500, Map.of("error", e.getMessage()));
+            }
+        }
+    }
+
+    private class RecordTabsHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) {
+                handleOptions(exchange);
+                return;
+            }
+            try {
+                Map<String, String> query = parseQueryParams(exchange.getRequestURI().getQuery());
+                String cdpUrl = query.getOrDefault("cdpUrl", "http://127.0.0.1:9222");
+
+                HttpClient client = HttpClient.newHttpClient();
+                HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(cdpUrl + "/json/list"))
+                    .build();
+                HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+                byte[] responseBytes = response.body().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
+                exchange.getResponseHeaders().add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+                exchange.getResponseHeaders().add("Access-Control-Allow-Headers", "Content-Type");
+                exchange.getResponseHeaders().add("Content-Type", "application/json");
+                exchange.sendResponseHeaders(200, responseBytes.length);
+                try (OutputStream os = exchange.getResponseBody()) {
+                    os.write(responseBytes);
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+                sendJson(exchange, 500, Map.of("error", e.getMessage() != null ? e.getMessage() : e.toString()));
+            }
+        }
+    }
+
+    private class RecordStartHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) {
+                handleOptions(exchange);
+                return;
+            }
+            try {
+                Map<String, String> query = parseQueryParams(exchange.getRequestURI().getQuery());
+                String cdpUrl = query.getOrDefault("cdpUrl", "http://127.0.0.1:9222");
+                String targetTabUrl = query.getOrDefault("targetTabUrl", "");
+                String outputPath = query.getOrDefault("outputPath", "./session.crn");
+
+                // Stop active session if any
+                if (activeSession != null) {
+                    try {
+                        activeSession.close();
+                    } catch (Exception ex) {
+                        // ignore
+                    }
+                    activeSession = null;
+                }
+
+                com.chronos.recorder.RecordOptions options = com.chronos.recorder.RecordOptions.builder()
+                    .cdpUrl(cdpUrl)
+                    .targetTabUrl(targetTabUrl)
+                    .outputCrn(outputPath)
+                    .build();
+
+                activeSession = com.chronos.recorder.Chronos.record(options);
+                sendJson(exchange, 200, Map.of("status", "success", "message", "Recording started successfully."));
+            } catch (Exception e) {
+                e.printStackTrace();
+                sendJson(exchange, 500, Map.of("error", e.getMessage() != null ? e.getMessage() : e.toString()));
+            }
+        }
+    }
+
+    private class RecordStopHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) {
+                handleOptions(exchange);
+                return;
+            }
+            try {
+                if (activeSession == null) {
+                    sendJson(exchange, 400, Map.of("error", "No active recording session to stop."));
+                    return;
+                }
+
+                activeSession.close();
+                activeSession = null;
+                sendJson(exchange, 200, Map.of("status", "success", "message", "Recording stopped and packaged successfully."));
+            } catch (Exception e) {
+                e.printStackTrace();
+                sendJson(exchange, 500, Map.of("error", e.getMessage() != null ? e.getMessage() : e.toString()));
+            }
+        }
+    }
+
+    private class SessionLoadHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) {
+                handleOptions(exchange);
+                return;
+            }
+            try {
+                Map<String, String> query = parseQueryParams(exchange.getRequestURI().getQuery());
+                String pathParam = query.get("path");
+                if (pathParam == null || pathParam.isEmpty()) {
+                    sendJson(exchange, 400, Map.of("error", "Missing query parameter: 'path'"));
+                    return;
+                }
+
+                Path path = Path.of(pathParam);
+                if (!Files.exists(path)) {
+                    sendJson(exchange, 404, Map.of("error", "CRN session file not found at path: " + pathParam));
+                    return;
+                }
+
+                // Close existing replayEngine
+                if (replayEngine != null) {
+                    try {
+                        replayEngine.close();
+                    } catch (Exception ex) {
+                        // ignore
+                    }
+                }
+
+                replayEngine = new ReplayEngine(path);
+                crnPath = path;
+
+                System.out.println("Chronos server loaded new session container: " + path.toAbsolutePath());
+                sendJson(exchange, 200, Map.of("status", "success", "message", "Session container loaded successfully."));
+            } catch (Exception e) {
+                e.printStackTrace();
+                sendJson(exchange, 500, Map.of("error", e.getMessage() != null ? e.getMessage() : e.toString()));
             }
         }
     }
