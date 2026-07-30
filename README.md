@@ -83,6 +83,10 @@ npm run dev
 ### Step 7 (Optional): Run Backend Replay Server Directly
 If you want to spin up the local HTTP replay backend standalone without the desktop app:
 ```powershell
+# Recommended (runs directly via Gradle to bypass JAR packaging restrictions):
+.\recorder\gradlew.bat :cli:runCli -PcliArgs="server samples/new_session.crn --port 8085"
+
+# Alternative (runs the packaged Fat JAR):
 java -jar cli/build/libs/cli-1.0.0.jar server samples/new_session.crn --port 8085
 ```
 
@@ -122,7 +126,10 @@ Chronos compiles recorded sessions into a single compressed `.crn` (Chronos Reco
 
 ## 🛠️ CLI Features & Subcommands
 
-Run subcommands using the fat JAR: `java -jar cli/build/libs/cli-1.0.0.jar [COMMAND] [ARGS]`
+Commands can be run either directly via the packaged fat JAR or through the Gradle `runCli` execution task:
+
+* **Using Gradle (Recommended for Local Dev)**: `.\recorder\gradlew.bat :cli:runCli -PcliArgs="[COMMAND] [ARGS]"`
+* **Using packaged Fat JAR**: `java -jar cli/build/libs/cli-1.0.0.jar [COMMAND] [ARGS]`
 
 ### 1. E2E Recorder Wrapper (`record`)
 Wrap test suites and conditionally save container only on failures (saves disk space):
