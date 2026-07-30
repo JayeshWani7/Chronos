@@ -101,7 +101,6 @@ public class ChronosSession implements AutoCloseable {
 
             // GC and short sleep to unlock SQLite files on Windows
             System.gc();
-            System.runFinalization();
             Thread.sleep(100);
 
             deleteDir(tempDir);

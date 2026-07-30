@@ -119,7 +119,6 @@ public class App implements CommandLineRunner {
 
             // Explicitly trigger GC and sleep briefly to release SQLite and Playwright file locks on Windows
             System.gc();
-            System.runFinalization();
             Thread.sleep(200);
 
             deleteDir(tempDir);
